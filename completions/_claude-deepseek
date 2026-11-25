@@ -1,0 +1,22 @@
+#compdef claude-deepseek
+# zsh completion for claude-deepseek
+
+_claude-deepseek() {
+  local -a models=(
+    'deepseek-flash\[1m\]:DeepSeek V4.1 Flash, 1M context (default)'
+    'deepseek-flash:DeepSeek V4.1 Flash'
+    'deepseek-v4-pro:DeepSeek V4 Pro'
+  )
+
+  _arguments -s \
+    '(- *)--set-key[save or replace the DeepSeek API key]' \
+    '(- *)--check[send a tiny test request to DeepSeek]' \
+    '(- *)--deepseek-help[show launcher help]' \
+    '(-p --print)'{-p,--print}'[print response and exit]' \
+    '(-c --continue)'{-c,--continue}'[continue the most recent conversation]' \
+    '(-r --resume)'{-r,--resume}'[resume a conversation]' \
+    '--model[model for this session]:model:(($models))' \
+    '*:file:_files'
+}
+
+_claude-deepseek "$@"

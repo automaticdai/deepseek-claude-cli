@@ -4,15 +4,20 @@ Run [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) on
 [DeepSeek](https://www.deepseek.com/) models through DeepSeek's
 Anthropic-compatible API.
 
-`claude-deepseek` is a small Bash launcher. It sets the right environment
-variables and then starts your normal `claude` command. Your normal `claude`
-setup and Anthropic login are not changed, so you can use both side by side.
+`claude-deepseek` is a small shell script, not a compiled binary. It sets the
+right environment variables and then starts your normal `claude` command. Your
+normal `claude` setup and Anthropic login are not changed, so you can use both
+side by side.
 
 ## Requirements
 
+- macOS, Linux or WSL
 - Claude Code installed, with `claude` on your `PATH`
-- Bash and `curl` (Linux, macOS or WSL)
+- `curl` (only for `--check`)
 - A DeepSeek API key: <https://platform.deepseek.com/api_keys>
+
+The scripts run with bash, which every Mac and Linux system already has
+(including macOS's built-in bash 3.2). You can use them from zsh or bash.
 
 ## Install
 
@@ -22,13 +27,43 @@ cd deepseek-claude-cli
 ./install.sh
 ```
 
-The installer copies the launcher to `~/.local/bin` and asks for your API key.
+The installer:
+
+1. Copies the launcher to `~/.local/bin`.
+2. Sets up your shell (it detects zsh or bash from `$SHELL`):
+   - **zsh** (default on macOS): installs tab completion and adds a short block
+     to `~/.zshrc` that loads it, plus a `PATH` line if `~/.local/bin` isn't
+     already on your `PATH`.
+   - **bash**: adds a `PATH` line to `~/.bashrc` (`~/.bash_profile` on macOS),
+     only if it's needed.
+
+   It asks before changing the file. Its changes sit between
+   `# >>> claude-deepseek >>>` markers, so reinstalling replaces them rather
+   than adding duplicates, and `uninstall.sh` removes them cleanly.
+3. Asks for your API key.
+
+Open a new terminal afterwards, or `source ~/.zshrc`.
 
 | Option | Effect |
 |---|---|
 | `--dir DIR` | Install somewhere other than `~/.local/bin` |
 | `--link` | Symlink instead of copy, so `git pull` updates it |
+| `--shell zsh\|bash` | Set up for this shell instead of your login shell |
+| `--no-rc` | Don't edit any rc file; print the lines to add yourself |
 | `--no-key` | Skip the API key prompt |
+
+### zsh tab completion
+
+With zsh you can tab-complete the launcher's own flags (`--check`,
+`--set-key`, ...), common `claude` flags, and DeepSeek model names after
+`--model`:
+
+```zsh
+claude-deepseek --model <TAB>
+deepseek-flash[1m]  -- DeepSeek V4.1 Flash, 1M context (default)
+deepseek-flash      -- DeepSeek V4.1 Flash
+deepseek-v4-pro     -- DeepSeek V4 Pro
+```
 
 ## Usage
 
@@ -107,7 +142,7 @@ feature is supported
 ## Uninstall
 
 ```bash
-./uninstall.sh            # remove the launcher, keep the saved key
+./uninstall.sh            # remove the launcher, completion and rc-file block; keep the key
 ./uninstall.sh --purge    # also delete the saved key
 ```
 
