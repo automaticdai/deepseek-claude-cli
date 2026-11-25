@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# claude-deepseek — run Claude Code against DeepSeek's Anthropic-compatible API.
+#
+# Usage:
+#   claude-deepseek [any normal claude args...]
+#   claude-deepseek --set-key          # store your DeepSeek API key
+#   claude-deepseek --check            # test the key/endpoint with a tiny request
+#   claude-deepseek --deepseek-help    # show this help (--help goes to claude)
+#
+# API key lookup order:
+#   1. $DEEPSEEK_API_KEY
+#   2. ~/.config/deepseek/api_key  (created by --set-key, chmod 600)
+#
+# Defaults follow DeepSeek's Claude Code guide (checked 2026-11-25):
+#   https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code/
+# Models: deepseek-flash (V4.1-Flash, 1M ctx, vision) and deepseek-v4-pro (no vision).
+#
+# Overridable via environment:
+#   DEEPSEEK_BASE_URL    (default: https://api.deepseek.com/anthropic)
+#   DEEPSEEK_MODEL       main model           (default: deepseek-flash[1m])
+#   DEEPSEEK_FAST_MODEL  haiku/subagent model (default: deepseek-flash)
+#   DEEPSEEK_EFFORT      effort level         (default: max)
+#   e.g. DEEPSEEK_MODEL=deepseek-v4-pro claude-deepseek
+
+set -euo pipefail
+
+KEY_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/deepseek/api_key"
+BASE_URL="${DEEPSEEK_BASE_URL:-https://api.deepseek.com/anthropic}"
+MODEL="${DEEPSEEK_MODEL:-deepseek-flash[1m]}"
+FAST_MODEL="${DEEPSEEK_FAST_MODEL:-deepseek-flash}"
+EFFORT="${DEEPSEEK_EFFORT:-max}"
+
+die() { echo "claude-deepseek: $*" >&2; exit 1; }
+
+set_key() {
+  mkdir -p "$(dirname "$KEY_FILE")"
+  read -r -s -p "DeepSeek API key: " key; echo
+  [[ -n "$key" ]] || die "empty key, nothing saved"
+  (umask 077; printf '%s\n' "$key" > "$KEY_FILE")
+  echo "Saved to $KEY_FILE"
+}
+
+load_key() {
+  if [[ -n "${DEEPSEEK_API_KEY:-}" ]]; then
+    printf '%s' "$DEEPSEEK_API_KEY"
+  elif [[ -r "$KEY_FILE" ]]; then
+    tr -d '[:space:]' < "$KEY_FILE"
+  else
+    die "no API key. Run '$0 --set-key' or export DEEPSEEK_API_KEY."
+  fi
+}
+
+check() {
+  local key api_model
+  key="$(load_key)"
+  api_model="${MODEL%\[1m\]}"   # [1m] is a Claude Code hint, not part of the API model ID
+  echo "POST $BASE_URL/v1/messages  (model: $api_model)"
+  curl -sS --max-time 60 "$BASE_URL/v1/messages" \
+    -H "x-api-key: $key" \
+    -H "anthropic-version: 2023-06-01" \
+    -H "content-type: application/json" \
+    -d "{\"model\":\"$api_model\",\"max_tokens\":64,\"messages\":[{\"role\":\"user\",\"content\":\"Say hi\"}]}"
+  echo
+}
+
+case "${1:-}" in
+  --set-key) set_key; exit 0 ;;
+  --check)   check;   exit 0 ;;
+  --deepseek-help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+
+command -v claude >/dev/null || die "'claude' not found on PATH"
+KEY="$(load_key)"
+
+# Don't let a real Anthropic key leak into or override this session.
+unset ANTHROPIC_API_KEY
+
+export ANTHROPIC_BASE_URL="$BASE_URL"
+export ANTHROPIC_AUTH_TOKEN="$KEY"
+export ANTHROPIC_MODEL="$MODEL"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="$MODEL"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="$MODEL"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="$FAST_MODEL"
+export CLAUDE_CODE_SUBAGENT_MODEL="$FAST_MODEL"
+export CLAUDE_CODE_EFFORT_LEVEL="$EFFORT"
+export CLAUDE_CODE_AUTO_COMPACT_WINDOW="${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-786432}"
+export API_TIMEOUT_MS="${API_TIMEOUT_MS:-600000}"
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+
+exec claude "$@"
